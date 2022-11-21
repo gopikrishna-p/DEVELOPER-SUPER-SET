@@ -1,0 +1,12 @@
+1 . Use Formula Fields
+----------------------
+
+Object Manager -> Contract -> Fields & Realationship
+Data Type           : Formula
+Field Label         : Days Remaining
+Field Name          : Days_Remaining
+Formula Return Type : Number
+****************************
+EndDate  -  TODAY() 
+****************************
+Next -> Next -> Save
