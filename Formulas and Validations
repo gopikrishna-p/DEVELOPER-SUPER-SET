@@ -24,3 +24,12 @@ Click "Next"
 Summarized Object   : Opportunities
 Select Roll-Up Type : SUM  -> Expected Revenue
 Next -> Next -> Save
+
+
+3 . Create Validation Rules
+-----------------------------
+
+Object Manager -> Contact -> Validation Rules -> NEW
+Rule Name                 : Contact_must_be_in_Account_ZIP_Code
+Error Condition Formula   : AND(NOT(ISBLANK( AccountId )), MailingPostalCode <>  Account.ShippingPostalCode )
+Error Message             : no errors
