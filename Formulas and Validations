@@ -10,3 +10,17 @@ Formula Return Type : Number
 EndDate  -  TODAY() 
 ****************************
 Next -> Next -> Save
+
+
+
+2 . Implement Roll-Up Summary Fields
+-------------------------------------
+
+Object Manager -> Account -> Fields & Realationship
+Data Type           : Roll up Summary
+Field Label         : Potential Value
+Field Label         : Potential_Value
+Click "Next"
+Summarized Object   : Opportunities
+Select Roll-Up Type : SUM  -> Expected Revenue
+Next -> Next -> Save
