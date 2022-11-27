@@ -1,16 +1,248 @@
--
+                                                                 Asynchronous Apex
+                                                               ---------------------
+                                                               
+1 . Asynchronous process Basics
+--------------------------------
+    1) A
+    2) C
+    
+_____________________________________________________________________________________________________________________________________________________________________________________________-
+
+2 . Use Future Methods
+----------------------
+Create a field on the Account object:
+   Label     : Number Of Contacts
+   Name      : Number_Of_Contacts
+   Type      : Number
+
+APEX CLASS :
+````````````
+AccountProcessor :
+
+public class AccountProcessor {
+	@future
+    public static void countContacts(List<Id> accountIds){
+        
+        List<Account> accountsToUpdate = new List<Account>();
+        
+        List<Account> accounts = [Select Id, Name, (Select Id from Contacts) from Account Where Id in :accountIds];
+        
+        For(Account acc:accounts){
+            List<Contact> contactList = acc.Contacts;
+            acc.Number_Of_Contacts__c = contactList.size();
+            accountsToUpdate.add(acc);
+            
+        }
+        update accountsToUpdate;
+        
+    }
+}
+
+__________________________________________________________________________________________
+
+APEX CLASS :
+````````````
+AccountProcessorTest :
+
+@IsTest
+private class AccountProcessorTest {
+	@IsTest
+    private static void testCountContacts(){
+        Account newAccount = new Account(Name='Test Account');
+        insert newAccount;
+        
+        Contact c = new Contact();
+        c.FirstName = 'Bob';
+        c.LastName =  'Willie';
+        c.AccountId = newAccount.Id;
+        
+        Contact c2 = new Contact();
+        c2.FirstName = 'Tom';
+        c2.LastName = 'Cruise';
+        c2.AccountId = newAccount.Id;
+        
+        List<Id> accountIds = new List<Id>();
+        accountIds.add(newAccount.Id);
+        
+        Test.startTest();
+        AccountProcessor.countContacts(accountIds);
+        Test.stopTest();
+        
+    }
+}
+
+________________________________________________________________________________________________
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`
+
+3 . Use Batch Apex
+```````````````````
+ APEX CLASS : LeadProcessor :
+
+public class LeadProcessor implements Database.Batchable<sObject> { 
+   
+     public Database.QueryLocator start(Database.BatchableContext bc) {
+        // collect the batches of records or objects to be passed to execute
+          return Database.getQueryLocator([Select LeadSource From Lead ]);
+    }
+    public void execute(Database.BatchableContext bc, List<Lead> leads){
+         // process each batch of records
+            for (Lead Lead : leads) {
+                lead.LeadSource = 'Dreamforce';
+            }
+        update leads;
+    }    
+    public void finish(Database.BatchableContext bc){
+      }
+}
+
+_______________________________________________________________________________________________________
+
+APEX CLASS : LeadProcessorTest :
+
+@isTest
+public class LeadProcessorTest {
+    
+        @testSetup
+    static void setup() {
+        List<Lead> leads = new List<Lead>();
+        for(Integer counter=0 ;counter <200;counter++){
+            Lead lead = new Lead();
+            lead.FirstName ='FirstName';
+            lead.LastName ='LastName'+counter;
+            lead.Company ='demo'+counter;
+            leads.add(lead);
+        }        
+        insert leads;
+    }
+    
+    @isTest static void test() {
+        Test.startTest();
+        LeadProcessor leadProcessor = new LeadProcessor();
+        Id batchId = Database.executeBatch(leadProcessor);
+        Test.stopTest();   
+    }
+
+}
+_____________________________________________________________________________________________________
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+4 . Control Processes with Queueable Apex
+-----------------------------------------
+
+APEX CLASS : AddPrimaryContact :
+
+public class AddPrimaryContact implements Queueable
+{
+    private Contact c;
+    private String state;
+    public  AddPrimaryContact(Contact c, String state)
+    {
+        this.c = c;
+        this.state = state;
+    }
+    public void execute(QueueableContext context) 
+    {
+         List<Account> ListAccount = [SELECT ID, Name ,(Select id,FirstName,LastName from contacts ) FROM ACCOUNT WHERE BillingState = :state LIMIT 200];
+         List<Contact> lstContact = new List<Contact>();
+         for (Account acc:ListAccount)
+         {
+                 Contact cont = c.clone(false,false,false,false);
+                 cont.AccountId =  acc.id;
+                 lstContact.add( cont );
+         }
+         
+         if(lstContact.size() >0 )
+         {
+             insert lstContact;
+         }
+             
+    }
+
+}
+_____________________________________________________________________________________________
 
 
+APEX CLASS : AddPrimaryContactTest :
+
+@isTest
+public class AddPrimaryContactTest 
+{
+     @isTest static void TestList()
+     {
+         List<Account> Teste = new List <Account>();
+         for(Integer i=0;i<50;i++)
+         {
+             Teste.add(new Account(BillingState = 'CA', name = 'Test'+i));
+         }
+         for(Integer j=0;j<50;j++)
+         {
+             Teste.add(new Account(BillingState = 'NY', name = 'Test'+j));
+         }
+         insert Teste;
+
+         Contact co = new Contact();
+         co.FirstName='demo';
+         co.LastName ='demo';
+         insert co;
+         String state = 'CA';
+      
+          AddPrimaryContact apc = new AddPrimaryContact(co, state);
+          Test.startTest();
+            System.enqueueJob(apc);
+          Test.stopTest();
+      }
+ }
+______________________________________________________________________________________________
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+5 . Schedule Jobs Using the Apex Scheduler
+------------------------------------------
+
+APEX CLASS : DailyLeadProcessor :
+
+public class DailyLeadProcessor implements Schedulable  {
+    Public void execute(SchedulableContext SC){
+       List<Lead> LeadObj=[SELECT Id from Lead where LeadSource=null limit 200]; 
+        for(Lead l:LeadObj){
+            l.LeadSource='Dreamforce';
+            update l;
+        }
+    }
+}
+__________________________________________________________________________________________________
 
 
+APEX CLASS : DailyLeadProcessorTest :
+
+@isTest
+private class DailyLeadProcessorTest {
+	static testMethod void testDailyLeadProcessor() {
+		String CRON_EXP = '0 0 1 * * ?';
+		List<Lead> lList = new List<Lead>();
+	    for (Integer i = 0; i < 200; i++) {
+			lList.add(new Lead(LastName='Dreamforce'+i, Company='Test1 Inc.', Status='Open - Not Contacted'));
+		}
+		insert lList;
+		  
+		Test.startTest();
+		String jobId = System.schedule('DailyLeadProcessor', CRON_EXP, new DailyLeadProcessor()); 
+	}
+}
+_____________________________________________________________________________________________________
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+6 . Monitor Asynchronous Apex
+-------------------------------
+
+   1) A
+   2) B
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-------------------------------------COOMING SOON-------------------------------------
+@GK
 
-
-
-
-
-
-
--
